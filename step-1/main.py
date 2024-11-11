@@ -9,7 +9,7 @@ def main():
     collector = DatasetCollector()
 
     # Buka webcam
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(2)
 
     # Buat windows
     cv2.namedWindow('Original', cv2.WINDOW_NORMAL)

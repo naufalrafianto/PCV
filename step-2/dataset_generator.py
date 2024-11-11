@@ -7,46 +7,53 @@ from utils.image_processing import get_warped_card
 
 class CardDatasetGenerator:
     def __init__(self, output_dir="dataset"):
+        # Inisialisasi direktori output untuk menyimpan dataset kartu
         self.output_dir = output_dir
+        # Kamus untuk menyimpan nama kartu berdasarkan nilai
         self.card_names = {
-            'A': 'ace',   '2': 'two',   '3': 'three',
-            '4': 'four',  '5': 'five',  '6': 'six',
+            'A': 'ace', '2': 'two', '3': 'three',
+            '4': 'four', '5': 'five', '6': 'six',
             '7': 'seven', '8': 'eight', '9': 'nine',
-            '0': 'ten',   'J': 'jack',  'Q': 'queen',
+            '0': 'ten', 'J': 'jack', 'Q': 'queen',
             'K': 'king'
         }
+        # Kamus untuk menyimpan jenis kartu
         self.suits = {
             'H': 'hearts',
             'D': 'diamonds',
             'C': 'clubs',
             'S': 'spades'
         }
-        self.current_card = None
-        self.current_count = 0
-        self.max_samples = 50
-        self.last_save_time = 0
-        self.save_delay = 0.1  # 100ms delay between saves
+        self.current_card = None  # Menyimpan kartu saat ini yang sedang diproses
+        self.current_count = 0  # Hitung jumlah gambar yang diambil untuk kartu saat ini
+        self.max_samples = 50  # Maksimal jumlah gambar per kartu
+        self.last_save_time = 0  # Waktu simpan terakhir untuk mencegah penyimpanan berlebihan
+        self.save_delay = 0.1  # Delay antara penyimpanan gambar (100ms)
 
+        # Buat direktori output jika belum ada
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
     def set_current_card(self, shortcut):
-        """Set kartu menggunakan shortcut (contoh: 'QH' untuk Queen of Hearts)"""
+        """Set kartu berdasarkan shortcut input (contoh: 'QH' untuk Queen of Hearts)"""
         if len(shortcut) < 2:
             return False
 
+        # Ambil nilai dan jenis dari input
         value = shortcut[0].upper()
         suit = shortcut[1].upper()
 
         # Handle angka 10
         if value == '1' and len(shortcut) >= 3 and shortcut[1] == '0':
-            value = '0'  # menggunakan '0' untuk merepresentasikan 10
+            value = '0'
             suit = shortcut[2].upper()
 
+        # Pastikan nilai dan jenis valid
         if value in self.card_names and suit in self.suits:
             self.current_card = f"{self.card_names[value]}_{self.suits[suit]}"
             self.current_count = 0
 
+            # Buat direktori untuk kartu jika belum ada
             card_dir = os.path.join(self.output_dir, self.current_card)
             if not os.path.exists(card_dir):
                 os.makedirs(card_dir)
@@ -55,12 +62,14 @@ class CardDatasetGenerator:
         return False
 
     def save_card_image(self, binary_image):
-        """Simpan gambar kartu ke dataset"""
+        """Simpan gambar kartu ke folder dataset"""
         current_time = time.time()
+        # Cegah penyimpanan berlebihan dengan delay
         if current_time - self.last_save_time < self.save_delay:
             return -1
 
         if self.current_card and self.current_count < self.max_samples:
+            # Simpan gambar kartu dengan format yang sesuai
             card_dir = os.path.join(self.output_dir, self.current_card)
             filename = f"{self.current_card}_{self.current_count:03d}.png"
             filepath = os.path.join(card_dir, filename)
@@ -74,6 +83,7 @@ class CardDatasetGenerator:
 
 
 def print_help():
+    """Tampilkan panduan input dan kontrol program"""
     print("\nPanduan Shortcut:")
     print("1. Input format: [Nilai][Jenis]")
     print("   Nilai: A,2-9,0(untuk 10),J,Q,K")
@@ -91,9 +101,11 @@ def print_help():
 
 
 def generate_dataset():
+    # Mulai capture video dari kamera
     cap = cv2.VideoCapture(2)
     generator = CardDatasetGenerator()
 
+    # Tampilkan jendela untuk frame original dan hasil binary
     cv2.namedWindow('Original', cv2.WINDOW_NORMAL)
     cv2.namedWindow('Binary Result', cv2.WINDOW_NORMAL)
     cv2.resizeWindow('Original', 600, 400)
@@ -108,9 +120,10 @@ def generate_dataset():
         if not ret:
             break
 
+        # Deteksi kartu pada frame
         card_found, corners, _, _ = detect_card(frame)
 
-        # Tampilkan frame original
+        # Tampilkan informasi pada frame original
         cv2.putText(frame, f"Input: {current_input}", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
         if generator.current_card:
@@ -121,11 +134,12 @@ def generate_dataset():
 
         cv2.imshow('Original', frame)
 
+        # Tampilkan gambar kartu binary jika ditemukan
         if card_found and corners is not None:
             _, binary_warped = get_warped_card(frame, corners)
             cv2.imshow('Binary Result', binary_warped)
 
-            # Auto capture jika sedang dalam mode capturing
+            # Simpan gambar jika mode capturing aktif
             if is_capturing and generator.current_card:
                 count = generator.save_card_image(binary_warped)
                 if count > 0:
@@ -139,16 +153,17 @@ def generate_dataset():
 
         key = cv2.waitKey(1) & 0xFF
 
-        if key == ord('/'):
+        if key == ord('/'):  # Keluar dengan key '/'
             break
-        elif key == ord(';'):
+        elif key == ord(';'):  # Tampilkan panduan dengan key ';'
             print_help()
-        elif key == 32:  # SPACE
+        elif key == 32:  # SPACE untuk memulai auto-capture
             if generator.current_card and card_found:
                 is_capturing = True
                 print(f"\nMulai auto-capture untuk {generator.current_card}")
         elif key in [ord(str(i)) for i in range(10)] or \
                 key in [ord(c) for c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.lower()]:
+            # Input shortcut kartu (contoh: 'QH' untuk Queen of Hearts)
             current_input += chr(key).upper()
             if len(current_input) >= 2:
                 if generator.set_current_card(current_input):

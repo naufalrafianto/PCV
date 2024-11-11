@@ -8,17 +8,18 @@ from sklearn.model_selection import train_test_split
 
 class CardClassifier:
     def __init__(self, dataset_path="dataset", img_size=(120, 120)):
+        """Initialize CardClassifier with dataset path and image size."""
         self.dataset_path = dataset_path
         self.img_size = img_size
-        self.class_names = []
-        self.model = None
+        self.class_names = []  # List to store class names
+        self.model = None  # Variable to hold the trained model
 
     def load_dataset(self):
-        """Load dan preprocess dataset"""
-        images = []
-        labels = []
+        """Load and preprocess dataset."""
+        images = []  # List to store images
+        labels = []  # List to store labels
 
-        # Load semua kelas
+        # Load all class folders in the dataset
         self.class_names = sorted([d for d in os.listdir(self.dataset_path)
                                    if os.path.isdir(os.path.join(self.dataset_path, d))])
         print(f"Found {len(self.class_names)} classes")
@@ -29,29 +30,33 @@ class CardClassifier:
 
             for img_name in os.listdir(class_path):
                 img_path = os.path.join(class_path, img_name)
+                # Load image in grayscale
                 img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
 
                 if img is not None:
-                    img = cv2.resize(img, self.img_size)
-                    img = img / 255.0
+                    img = cv2.resize(img, self.img_size)  # Resize image
+                    img = img / 255.0  # Normalize pixel values to [0, 1]
+                    # Add channel dimension for grayscale
                     img = np.expand_dims(img, axis=-1)
                     images.append(img)
-                    labels.append(idx)
+                    labels.append(idx)  # Append class index as label
 
         X = np.array(images)
-        y = keras.utils.to_categorical(labels, len(self.class_names))
+        y = keras.utils.to_categorical(labels, len(
+            self.class_names))  # One-hot encode labels
 
+        # Split dataset into train and test
         return train_test_split(X, y, test_size=0.2, random_state=42)
 
     def build_model(self):
-        """Buat arsitektur CNN sederhana"""
+        """Build a simple CNN model."""
         self.model = keras.Sequential([
-            # Layer konvolusi pertama
+            # First convolutional layer
             layers.Conv2D(32, 3, activation='relu', input_shape=(
                 self.img_size[0], self.img_size[1], 1)),
             layers.MaxPooling2D(2),
 
-            # Layer konvolusi kedua
+            # Second convolutional layer
             layers.Conv2D(64, 3, activation='relu'),
             layers.MaxPooling2D(2),
 
@@ -59,69 +64,74 @@ class CardClassifier:
             layers.Flatten(),
             layers.Dense(128, activation='relu'),
             layers.Dropout(0.5),
+            # Output layer with softmax
             layers.Dense(len(self.class_names), activation='softmax')
         ])
 
         self.model.compile(
-            optimizer='adam',
-            loss='categorical_crossentropy',
-            metrics=['accuracy']
+            optimizer='adam',  # Optimizer
+            loss='categorical_crossentropy',  # Loss function for multi-class classification
+            metrics=['accuracy']  # Metric to track accuracy
         )
 
         return self.model
 
     def train(self, X_train, y_train, X_test, y_test, epochs=10, batch_size=32):
-        """Train model"""
+        """Train the model."""
         history = self.model.fit(
             X_train, y_train,
             epochs=epochs,
             batch_size=batch_size,
             validation_data=(X_test, y_test),
-            verbose=1
+            verbose=1  # Verbose output
         )
 
-        # Evaluate
+        # Evaluate model on test data
         test_loss, test_acc = self.model.evaluate(X_test, y_test, verbose=0)
         print(f'\nTest accuracy: {test_acc:.4f}')
 
-        return history
+        return history  # Return training history
 
     def save_model(self, filepath="card_classifier_simple.h5"):
-        """Simpan model"""
+        """Save the model to a file."""
         self.model.save(filepath)
 
-        # Simpan nama kelas
+        # Save class names to a text file
         class_names_file = os.path.splitext(filepath)[0] + "_classes.txt"
         with open(class_names_file, 'w') as f:
             for class_name in self.class_names:
                 f.write(f"{class_name}\n")
 
     def load_model(self, filepath="card_classifier_simple.h5"):
-        """Load model"""
+        """Load the model from a file."""
         self.model = keras.models.load_model(filepath)
 
+        # Load class names from the saved text file
         class_names_file = os.path.splitext(filepath)[0] + "_classes.txt"
         with open(class_names_file, 'r') as f:
             self.class_names = [line.strip() for line in f.readlines()]
 
     def predict(self, image):
-        """Prediksi satu gambar"""
+        """Predict the class of a single image."""
         if image.shape != self.img_size or len(image.shape) != 2:
+            # Resize if not the correct size
             image = cv2.resize(image, self.img_size)
 
-        image = image / 255.0
-        image = np.expand_dims(image, axis=0)
-        image = np.expand_dims(image, axis=-1)
+        image = image / 255.0  # Normalize pixel values
+        image = np.expand_dims(image, axis=0)  # Add batch dimension
+        image = np.expand_dims(image, axis=-1)  # Add channel dimension
 
-        predictions = self.model.predict(image, verbose=0)
+        predictions = self.model.predict(image, verbose=0)  # Predict
+        # Get class with highest confidence
         predicted_class = np.argmax(predictions[0])
-        confidence = predictions[0][predicted_class]
+        confidence = predictions[0][predicted_class]  # Get confidence score
 
+        # Return class name and confidence
         return self.class_names[predicted_class], confidence
 
 
 def main():
-    # Inisialisasi classifier
+    # Initialize classifier
     classifier = CardClassifier(img_size=(120, 120))
 
     # Load dataset
@@ -130,12 +140,12 @@ def main():
     print(f"Training samples: {len(X_train)}")
     print(f"Testing samples: {len(X_test)}")
 
-    # Build dan train model
+    # Build and train model
     print("\nBuilding and training model...")
     classifier.build_model()
     classifier.train(X_train, y_train, X_test, y_test, epochs=10)
 
-    # Simpan model
+    # Save model
     classifier.save_model()
 
 
